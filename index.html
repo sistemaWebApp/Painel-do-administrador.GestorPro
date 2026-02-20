@@ -1,40 +1,32 @@
-
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GP Admin - Gerador de Acessos</title>
+    <title>GP Admin - Autorizar Clientes</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body class="bg-slate-900 text-white min-h-screen flex items-center justify-center p-6">
-
     <div class="bg-white text-slate-900 w-full max-w-md p-8 rounded-[2.5rem] shadow-2xl">
         <div class="text-center mb-8">
             <div class="w-16 h-16 bg-red-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg mb-4">
-                <i class="fas fa-key text-white text-2xl"></i>
+                <i class="fas fa-user-check text-white text-2xl"></i>
             </div>
-            <h2 class="text-2xl font-black uppercase tracking-tighter">Gerador de Chaves</h2>
+            <h2 class="text-2xl font-black uppercase tracking-tighter">Autorizar Cliente</h2>
             <p class="text-slate-400 text-xs font-bold uppercase">Gestão Pro Enterprise</p>
         </div>
-
         <div class="space-y-4">
             <div>
-                <label class="text-[10px] font-black uppercase ml-2 text-slate-400">Documento do Cliente</label>
-                <input type="text" id="new-doc" placeholder="CPF ou CNPJ (só números)" class="w-full p-4 bg-slate-100 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all">
+                <label class="text-[10px] font-black uppercase ml-2 text-slate-400">Documento para Liberação</label>
+                <input type="text" id="docCliente" placeholder="CPF ou CNPJ (só números)" 
+                    class="w-full p-4 bg-slate-100 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all">
             </div>
-            
-            <div>
-                <label class="text-[10px] font-black uppercase ml-2 text-slate-400">Chave de Acesso</label>
-                <input type="text" id="new-key" placeholder="EX: ACESSO-2026" class="w-full p-4 bg-slate-100 rounded-2xl font-bold uppercase outline-none border-2 border-transparent focus:border-red-500 transition-all">
-            </div>
-
-            <button onclick="gerarAcesso()" id="btn-gerar" class="w-full bg-red-600 hover:bg-red-700 text-white font-black py-5 rounded-2xl shadow-xl transition-all uppercase text-xs tracking-widest mt-4">
-                Liberar Acesso Agora
+            <button onclick="autorizarNoFirebase()" id="btn-gerar" 
+                class="w-full bg-red-600 hover:bg-red-700 text-white font-black py-5 rounded-2xl shadow-xl transition-all uppercase text-xs tracking-widest mt-4">
+                Autorizar Cadastro
             </button>
         </div>
-
         <div id="status" class="mt-6 text-center text-[10px] font-black uppercase hidden"></div>
     </div>
 
@@ -54,41 +46,33 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        window.gerarAcesso = async function() {
-            const docInput = document.getElementById('new-doc').value.trim().replace(/\D/g, '');
-            const keyInput = document.getElementById('new-key').value.trim().toUpperCase();
+        window.autorizarNoFirebase = async function() {
+            const docInput = document.getElementById('docCliente').value.trim().replace(/\D/g, '');
             const btn = document.getElementById('btn-gerar');
             const status = document.getElementById('status');
 
-            if (docInput.length < 11 || keyInput.length < 3) {
-                alert("Preencha os dados corretamente!");
+            if (docInput.length < 11) {
+                alert("Digite um CPF ou CNPJ válido!");
                 return;
             }
 
-            btn.innerText = "PROCESSANDO...";
+            btn.innerText = "AUTORIZANDO...";
             btn.disabled = true;
-            status.classList.add('hidden');
 
             try {
-                // Referência correta para a coleção "lincencas"
-                const docRef = doc(db, "lincencas", docInput);
-
-                await setDoc(docRef, {
-                    key: keyInput,
-                    status: "ativo",
-                    createdAt: new Date().toISOString()
+                await setDoc(doc(db, "autorizacoes", docInput), {
+                    status: "pendente",
+                    criadoEm: new Date().toISOString(),
+                    cadastrado: false
                 });
-
-                status.innerText = "ACESSO LIBERADO COM SUCESSO!";
+                status.innerText = "DOCUMENTO LIBERADO COM SUCESSO!";
                 status.className = "mt-6 text-center text-[10px] font-black uppercase text-green-600 block";
-                document.getElementById('new-doc').value = "";
-                document.getElementById('new-key').value = "";
+                document.getElementById('docCliente').value = "";
             } catch (e) {
-                console.error("Erro detalhado:", e);
-                status.innerText = "ERRO: VERIFIQUE AS REGRAS DO FIREBASE";
+                status.innerText = "ERRO AO AUTORIZAR";
                 status.className = "mt-6 text-center text-[10px] font-black uppercase text-red-600 block";
             } finally {
-                btn.innerText = "Liberar Acesso Agora";
+                btn.innerText = "Autorizar Cadastro";
                 btn.disabled = false;
             }
         };
