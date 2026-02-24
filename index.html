@@ -4,36 +4,350 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GP Admin - Autorizar Clientes</title>
+    <title>GP Admin - Painel de Licenciamento</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .status-pendente { @apply bg-yellow-100 text-yellow-700; }
+        .status-ativo { @apply bg-green-100 text-green-700; }
+        .status-bloqueado { @apply bg-red-100 text-red-700; }
+        .status-expirado { @apply bg-gray-100 text-gray-700; }
+        
+        .animate-pulse-slow {
+            animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
 </head>
-<body class="bg-slate-900 text-white min-h-screen flex items-center justify-center p-6">
-    <div class="bg-white text-slate-900 w-full max-w-md p-8 rounded-[2.5rem] shadow-2xl">
-        <div class="text-center mb-8">
-            <div class="w-16 h-16 bg-red-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg mb-4">
-                <i class="fas fa-user-check text-white text-2xl"></i>
+<body class="bg-slate-900 text-slate-900 min-h-screen">
+    
+    <!-- Login Screen (Protegido) -->
+    <div id="login-screen" class="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center p-6">
+        <div class="glass-panel w-full max-w-md p-10 rounded-3xl">
+            <div class="text-center mb-8">
+                <div class="w-20 h-20 bg-gradient-to-br from-red-600 to-red-800 rounded-2xl mx-auto flex items-center justify-center shadow-2xl mb-4">
+                    <i class="fas fa-shield-alt text-white text-3xl"></i>
+                </div>
+                <h2 class="text-2xl font-black uppercase tracking-tighter text-slate-900">GP Admin</h2>
+                <p class="text-slate-500 text-xs font-bold uppercase mt-1">Acesso Restrito</p>
             </div>
-            <h2 class="text-2xl font-black uppercase tracking-tighter">Autorizar Cliente</h2>
-            <p class="text-slate-400 text-xs font-bold uppercase">Gestão Pro Enterprise</p>
-        </div>
-        <div class="space-y-4">
-            <div>
-                <label class="text-[10px] font-black uppercase ml-2 text-slate-400">Documento para Liberação</label>
-                <input type="text" id="docCliente" placeholder="CPF ou CNPJ (só números)" 
-                    class="w-full p-4 bg-slate-100 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all">
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Senha Mestre</label>
+                    <input type="password" id="admin-password" 
+                        class="w-full p-5 bg-slate-100 rounded-2xl font-bold text-lg outline-none border-2 border-transparent focus:border-red-500 transition-all tracking-widest"
+                        placeholder="••••••••">
+                </div>
+                <button onclick="Auth.login()" id="btn-login" 
+                    class="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-black py-5 rounded-2xl shadow-xl transition-all uppercase text-xs tracking-widest">
+                    Acessar Painel
+                </button>
             </div>
-            <button onclick="autorizarNoFirebase()" id="btn-gerar" 
-                class="w-full bg-red-600 hover:bg-red-700 text-white font-black py-5 rounded-2xl shadow-xl transition-all uppercase text-xs tracking-widest mt-4">
-                Autorizar Cadastro
-            </button>
+            <p id="login-error" class="mt-4 text-center text-xs font-bold text-red-600 hidden"></p>
         </div>
-        <div id="status" class="mt-6 text-center text-[10px] font-black uppercase hidden"></div>
     </div>
 
+    <!-- Main Dashboard (Após login) -->
+    <div id="dashboard" class="hidden min-h-screen p-6">
+        <!-- Header -->
+        <header class="max-w-7xl mx-auto mb-8">
+            <div class="glass-panel rounded-3xl p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-4">
+                    <div class="w-14 h-14 bg-gradient-to-br from-red-600 to-red-800 rounded-2xl flex items-center justify-center shadow-lg">
+                        <i class="fas fa-crown text-white text-2xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-black uppercase tracking-tight">GP Admin</h1>
+                        <p class="text-slate-500 text-[10px] font-bold uppercase">Gestão Pro Enterprise - Painel Master</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-6">
+                    <div class="text-right">
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">Licenças Ativas</div>
+                        <div class="text-3xl font-black text-red-600" id="total-ativas">0</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">Faturamento Mensal</div>
+                        <div class="text-3xl font-black text-green-600" id="total-faturamento">R$ 0</div>
+                    </div>
+                    <button onclick="Auth.logout()" class="w-12 h-12 bg-slate-100 hover:bg-red-50 hover:text-red-600 rounded-xl flex items-center justify-center transition-all" title="Sair">
+                        <i class="fas fa-power-off"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Quick Actions -->
+        <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Nova Licença -->
+            <div class="glass-panel rounded-3xl p-8 lg:col-span-2">
+                <div class="flex items-center gap-3 mb-6">
+                    <i class="fas fa-plus-circle text-red-600 text-xl"></i>
+                    <h2 class="text-lg font-black uppercase">Nova Licença Enterprise</h2>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-slate-400 ml-1">CPF/CNPJ do Cliente *</label>
+                        <input type="text" id="novo-documento" maxlength="18"
+                            class="w-full p-4 bg-slate-100 rounded-xl font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all"
+                            placeholder="00.000.000/0000-00">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Nome da Empresa *</label>
+                        <input type="text" id="novo-nome"
+                            class="w-full p-4 bg-slate-100 rounded-xl font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all"
+                            placeholder="Razão Social">
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Email</label>
+                        <input type="email" id="novo-email"
+                            class="w-full p-4 bg-slate-100 rounded-xl font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all"
+                            placeholder="contato@empresa.com">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Telefone</label>
+                        <input type="tel" id="novo-telefone"
+                            class="w-full p-4 bg-slate-100 rounded-xl font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all"
+                            placeholder="(11) 99999-9999">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Subdomínio</label>
+                        <div class="flex">
+                            <input type="text" id="novo-subdominio"
+                                class="flex-1 p-4 bg-slate-100 rounded-l-xl font-bold outline-none border-2 border-r-0 border-transparent focus:border-red-500 transition-all"
+                                placeholder="empresa">
+                            <span class="px-4 py-4 bg-slate-200 rounded-r-xl text-slate-500 font-bold text-sm">.nexus.cloud</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Plano</label>
+                        <select id="novo-plano" class="w-full p-4 bg-slate-100 rounded-xl font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all">
+                            <option value="enterprise">Enterprise (R$ 997/mês)</option>
+                            <option value="pro">Pro (R$ 497/mês)</option>
+                            <option value="starter">Starter (R$ 197/mês)</option>
+                            <option value="custom">Personalizado</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Dias de Licença</label>
+                        <input type="number" id="novo-dias" value="365" min="1"
+                            class="w-full p-4 bg-slate-100 rounded-xl font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Valor Pago (R$)</label>
+                        <input type="number" id="novo-valor" value="11964" step="0.01"
+                            class="w-full p-4 bg-slate-100 rounded-xl font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all"
+                            placeholder="0,00">
+                    </div>
+                </div>
+                
+                <div class="flex gap-4">
+                    <button onclick="Licenca.criar()" id="btn-criar" 
+                        class="flex-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-black py-4 rounded-xl shadow-xl transition-all uppercase text-xs tracking-widest">
+                        <i class="fas fa-check-circle mr-2"></i>Gerar Licença
+                    </button>
+                    <button onclick="Licenca.limpar()" 
+                        class="px-6 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-4 rounded-xl transition-all uppercase text-xs tracking-widest">
+                        <i class="fas fa-eraser"></i>
+                    </button>
+                </div>
+                
+                <div id="resultado-novo" class="mt-4 hidden">
+                    <div class="p-4 bg-green-50 border-2 border-green-200 rounded-xl">
+                        <div class="flex items-center gap-2 mb-2">
+                            <i class="fas fa-check-circle text-green-600"></i>
+                            <span class="font-black text-green-700 text-sm uppercase">Licença Criada com Sucesso!</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-[10px] font-black uppercase text-green-600">Chave de Acesso</label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="chave-gerada" readonly
+                                        class="flex-1 p-3 bg-white rounded-lg font-mono font-bold text-sm border border-green-200">
+                                    <button onclick="Licenca.copiarChave()" class="px-4 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-black uppercase text-green-600">Expira em</label>
+                                <div id="data-expiracao" class="p-3 bg-white rounded-lg font-bold text-sm border border-green-200 text-green-700"></div>
+                            </div>
+                        </div>
+                        <p class="mt-3 text-[10px] text-green-600 font-bold">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Envie a chave de acesso para o cliente. Ele precisará dela + CPF/CNPJ para ativar.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Estatísticas Rápidas -->
+            <div class="glass-panel rounded-3xl p-8">
+                <h3 class="text-sm font-black uppercase mb-6 flex items-center gap-2">
+                    <i class="fas fa-chart-pie text-red-600"></i>
+                    Resumo do Mês
+                </h3>
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center p-4 bg-slate-50 rounded-xl">
+                        <span class="text-sm text-slate-600 font-bold">Novas Licenças</span>
+                        <span class="text-xl font-black text-red-600" id="resumo-novas">0</span>
+                    </div>
+                    <div class="flex justify-between items-center p-4 bg-slate-50 rounded-xl">
+                        <span class="text-sm text-slate-600 font-bold">Renovações</span>
+                        <span class="text-xl font-black text-green-600" id="resumo-renovacoes">0</span>
+                    </div>
+                    <div class="flex justify-between items-center p-4 bg-slate-50 rounded-xl">
+                        <span class="text-sm text-slate-600 font-bold">Expirando (7 dias)</span>
+                        <span class="text-xl font-black text-yellow-600" id="resumo-expirando">0</span>
+                    </div>
+                    <div class="flex justify-between items-center p-4 bg-slate-50 rounded-xl">
+                        <span class="text-sm text-slate-600 font-bold">Bloqueados</span>
+                        <span class="text-xl font-black text-red-600" id="resumo-bloqueados">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lista de Licenças -->
+        <div class="max-w-7xl mx-auto glass-panel rounded-3xl p-8 mb-8">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+                <h2 class="text-lg font-black uppercase flex items-center gap-2">
+                    <i class="fas fa-list-alt text-red-600"></i>
+                    Todas as Licenças
+                </h2>
+                <div class="flex gap-3">
+                    <input type="text" id="filtro-busca" onkeyup="Licenca.filtrar()" 
+                        class="p-3 bg-slate-100 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all w-64"
+                        placeholder="Buscar por CNPJ, nome...">
+                    <select id="filtro-status" onchange="Licenca.filtrar()" 
+                        class="p-3 bg-slate-100 rounded-xl text-sm font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all">
+                        <option value="todos">Todos os Status</option>
+                        <option value="ativo">Ativos</option>
+                        <option value="pendente">Pendentes</option>
+                        <option value="bloqueado">Bloqueados</option>
+                        <option value="expirado">Expirados</option>
+                    </select>
+                    <button onclick="Licenca.recarregar()" class="p-3 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all" title="Recarregar">
+                        <i class="fas fa-sync-alt text-slate-600"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-100 text-slate-500 font-black text-[10px] uppercase rounded-xl">
+                        <tr>
+                            <th class="p-4 text-left rounded-l-xl">Documento</th>
+                            <th class="p-4 text-left">Empresa</th>
+                            <th class="p-4 text-center">Plano</th>
+                            <th class="p-4 text-center">Status</th>
+                            <th class="p-4 text-center">Expiração</th>
+                            <th class="p-4 text-right">Valor</th>
+                            <th class="p-4 text-center rounded-r-xl">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lista-licencas" class="divide-y divide-slate-100">
+                        <!-- Populado via JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="sem-resultados" class="hidden p-8 text-center text-slate-400">
+                <i class="fas fa-inbox text-4xl mb-3 opacity-30"></i>
+                <p class="font-bold">Nenhuma licença encontrada</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Edição -->
+    <div id="modal-edicao" class="fixed inset-0 z-50 bg-slate-950/80 hidden items-center justify-center p-4 backdrop-blur-sm">
+        <div class="glass-panel w-full max-w-lg p-8 rounded-3xl animate-scale-in">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-black uppercase">Editar Licença</h3>
+                <button onclick="Licenca.fecharModal()" class="w-10 h-10 bg-slate-100 hover:bg-red-50 hover:text-red-600 rounded-xl flex items-center justify-center transition-all">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <input type="hidden" id="edit-id">
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Nome da Empresa</label>
+                    <input type="text" id="edit-nome" class="w-full p-4 bg-slate-100 rounded-xl font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Status</label>
+                        <select id="edit-status" class="w-full p-4 bg-slate-100 rounded-xl font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all">
+                            <option value="ativo">Ativo</option>
+                            <option value="pendente">Pendente</option>
+                            <option value="bloqueado">Bloqueado</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Dias para Expirar</label>
+                        <input type="number" id="edit-dias" class="w-full p-4 bg-slate-100 rounded-xl font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="text-[10px] font-black uppercase text-slate-400 ml-1">Nova Chave (deixe em branco para manter)</label>
+                    <input type="text" id="edit-chave" class="w-full p-4 bg-slate-100 rounded-xl font-mono font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all" placeholder="NEX-XXXX-XXXX-XXXX">
+                </div>
+                
+                <button onclick="Licenca.salvarEdicao()" class="w-full bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-black py-4 rounded-xl shadow-xl transition-all uppercase text-xs tracking-widest">
+                    <i class="fas fa-save mr-2"></i>Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Firebase -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { 
+            getFirestore, 
+            doc, 
+            setDoc, 
+            getDoc, 
+            getDocs, 
+            collection, 
+            updateDoc, 
+            deleteDoc,
+            query,
+            orderBy,
+            onSnapshot
+        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCboQje-660NNTe90tmS-HxF7_7hmTAhg4",
@@ -47,36 +361,497 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        window.autorizarNoFirebase = async function() {
-            const docInput = document.getElementById('docCliente').value.trim().replace(/\D/g, '');
-            const btn = document.getElementById('btn-gerar');
-            const status = document.getElementById('status');
+        // SENHA MESTRE - ALTERE AQUI!
+        const SENHA_MESTRE = "admin2024@"; // Mude para sua senha segura
 
-            if (docInput.length < 11) {
-                alert("Digite um CPF ou CNPJ válido!");
-                return;
-            }
+        // ==========================================
+        // AUTENTICAÇÃO LOCAL
+        // ==========================================
 
-            btn.innerText = "AUTORIZANDO...";
-            btn.disabled = true;
+        const Auth = {
+            login() {
+                const senha = document.getElementById('admin-password').value;
+                const btn = document.getElementById('btn-login');
+                const error = document.getElementById('login-error');
 
-            try {
-                await setDoc(doc(db, "autorizacoes", docInput), {
-                    status: "pendente",
-                    criadoEm: new Date().toISOString(),
-                    cadastrado: false
-                });
-                status.innerText = "DOCUMENTO LIBERADO COM SUCESSO!";
-                status.className = "mt-6 text-center text-[10px] font-black uppercase text-green-600 block";
-                document.getElementById('docCliente').value = "";
-            } catch (e) {
-                status.innerText = "ERRO AO AUTORIZAR";
-                status.className = "mt-6 text-center text-[10px] font-black uppercase text-red-600 block";
-            } finally {
-                btn.innerText = "Autorizar Cadastro";
-                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>VERIFICANDO...';
+                
+                setTimeout(() => {
+                    if (senha === SENHA_MESTRE) {
+                        sessionStorage.setItem('gp_admin_authenticated', 'true');
+                        this.showDashboard();
+                    } else {
+                        error.textContent = 'Senha incorreta!';
+                        error.classList.remove('hidden');
+                        btn.innerHTML = 'Acessar Painel';
+                    }
+                }, 800);
+            },
+
+            logout() {
+                sessionStorage.removeItem('gp_admin_authenticated');
+                location.reload();
+            },
+
+            check() {
+                if (sessionStorage.getItem('gp_admin_authenticated') === 'true') {
+                    this.showDashboard();
+                }
+            },
+
+            showDashboard() {
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                Licenca.carregarTodas();
             }
         };
+
+        // ==========================================
+        // GERENCIAMENTO DE LICENÇAS
+        // ==========================================
+
+        const Licenca = {
+            todasLicencas: [],
+
+            async criar() {
+                const documento = document.getElementById('novo-documento').value.replace(/\D/g, '');
+                const nome = document.getElementById('novo-nome').value.trim();
+                const email = document.getElementById('novo-email').value.trim();
+                const telefone = document.getElementById('novo-telefone').value.trim();
+                const subdominio = document.getElementById('novo-subdominio').value.trim().toLowerCase();
+                const plano = document.getElementById('novo-plano').value;
+                const dias = parseInt(document.getElementById('novo-dias').value) || 365;
+                const valor = parseFloat(document.getElementById('novo-valor').value) || 0;
+
+                if (!documento || documento.length < 11 || !nome) {
+                    this.toast('Preencha CPF/CNPJ e Nome da Empresa!', 'error');
+                    return;
+                }
+
+                const btn = document.getElementById('btn-criar');
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>GERANDO...';
+                btn.disabled = true;
+
+                try {
+                    // Verificar se já existe
+                    const docRef = doc(db, "autorizacoes", documento);
+                    const docSnap = await getDoc(docRef);
+                    
+                    if (docSnap.exists()) {
+                        this.toast('Este documento já possui licença!', 'error');
+                        btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Gerar Licença';
+                        btn.disabled = false;
+                        return;
+                    }
+
+                    // Gerar chave única
+                    const chave = this.gerarChave();
+                    
+                    // Calcular expiração
+                    const dataExpiracao = new Date();
+                    dataExpiracao.setDate(dataExpiracao.getDate() + dias);
+
+                    // Criar no Firebase
+                    await setDoc(docRef, {
+                        status: "ativo",
+                        criadoEm: new Date().toISOString(),
+                        cadastrado: false,
+                        chaveLicenca: chave,
+                        plano: plano,
+                        diasLicenca: dias,
+                        dataExpiracao: dataExpiracao.toISOString(),
+                        tenantId: null,
+                        valorPago: valor,
+                        dadosEmpresa: {
+                            nome: nome,
+                            email: email,
+                            telefone: telefone,
+                            subdominio: subdominio
+                        },
+                        historicoPagamentos: [{
+                            data: new Date().toISOString(),
+                            valor: valor,
+                            tipo: 'nova'
+                        }]
+                    });
+
+                    // Mostrar resultado
+                    document.getElementById('chave-gerada').value = chave;
+                    document.getElementById('data-expiracao').textContent = dataExpiracao.toLocaleDateString('pt-BR', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    });
+                    document.getElementById('resultado-novo').classList.remove('hidden');
+                    
+                    this.toast('Licença criada com sucesso!', 'success');
+                    this.limparCampos();
+                    this.carregarTodas();
+
+                } catch (e) {
+                    console.error(e);
+                    this.toast('Erro ao criar licença: ' + e.message, 'error');
+                } finally {
+                    btn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Gerar Licença';
+                    btn.disabled = false;
+                }
+            },
+
+            gerarChave() {
+                const prefixo = 'NEX';
+                const parte1 = Math.random().toString(36).substring(2, 6).toUpperCase();
+                const parte2 = Math.random().toString(36).substring(2, 6).toUpperCase();
+                const parte3 = Math.random().toString(36).substring(2, 6).toUpperCase();
+                const parte4 = Date.now().toString(36).substring(0, 4).toUpperCase();
+                return `${prefixo}-${parte1}-${parte2}-${parte3}-${parte4}`;
+            },
+
+            async carregarTodas() {
+                const tbody = document.getElementById('lista-licencas');
+                tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center"><i class="fas fa-spinner fa-spin mr-2"></i>Carregando...</td></tr>';
+
+                try {
+                    const querySnapshot = await getDocs(collection(db, "autorizacoes"));
+                    this.todasLicencas = [];
+                    
+                    querySnapshot.forEach((doc) => {
+                        this.todasLicencas.push({
+                            id: doc.id,
+                            ...doc.data()
+                        });
+                    });
+
+                    this.renderizarLista(this.todasLicencas);
+                    this.atualizarResumo();
+
+                } catch (e) {
+                    tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-red-600">Erro: ${e.message}</td></tr>`;
+                }
+            },
+
+            renderizarLista(licencas) {
+                const tbody = document.getElementById('lista-licencas');
+                const semResultados = document.getElementById('sem-resultados');
+
+                if (licencas.length === 0) {
+                    tbody.innerHTML = '';
+                    semResultados.classList.remove('hidden');
+                    return;
+                }
+
+                semResultados.classList.add('hidden');
+
+                tbody.innerHTML = licencas.map(l => {
+                    const expiracao = l.dataExpiracao ? new Date(l.dataExpiracao) : null;
+                    const hoje = new Date();
+                    const diasRestantes = expiracao ? Math.floor((expiracao - hoje) / (1000 * 60 * 60 * 24)) : 0;
+                    
+                    let statusClass = 'status-' + (l.status || 'pendente');
+                    let statusTexto = l.status?.toUpperCase() || 'PENDENTE';
+                    
+                    if (diasRestantes < 0 && l.status !== 'bloqueado') {
+                        statusClass = 'status-expirado';
+                        statusTexto = 'EXPIRADO';
+                    }
+
+                    const expiracaoTexto = expiracao ? 
+                        `${expiracao.toLocaleDateString('pt-BR')} (${diasRestantes} dias)` : 
+                        '-';
+
+                    return `
+                        <tr class="hover:bg-slate-50 transition-colors group">
+                            <td class="p-4 font-mono text-xs font-bold">${this.formatarDocumento(l.id)}</td>
+                            <td class="p-4">
+                                <div class="font-bold text-sm">${l.dadosEmpresa?.nome || 'Sem nome'}</div>
+                                <div class="text-[10px] text-slate-400">${l.dadosEmpresa?.email || ''}</div>
+                            </td>
+                            <td class="p-4 text-center">
+                                <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-slate-100 text-slate-600">
+                                    ${l.plano?.toUpperCase() || 'ENTERPRISE'}
+                                </span>
+                            </td>
+                            <td class="p-4 text-center">
+                                <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase ${statusClass}">
+                                    ${statusTexto}
+                                </span>
+                            </td>
+                            <td class="p-4 text-center text-xs ${diasRestantes < 7 && diasRestantes >= 0 ? 'text-red-600 font-bold' : 'text-slate-600'}">
+                                ${expiracaoTexto}
+                            </td>
+                            <td class="p-4 text-right font-bold text-slate-700">
+                                ${l.valorPago ? 'R$ ' + l.valorPago.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '-'}
+                            </td>
+                            <td class="p-4 text-center">
+                                <div class="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onclick="Licenca.verDetalhes('${l.id}')" class="w-8 h-8 bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-lg flex items-center justify-center transition-all" title="Ver detalhes">
+                                        <i class="fas fa-eye text-xs"></i>
+                                    </button>
+                                    <button onclick="Licenca.abrirEdicao('${l.id}')" class="w-8 h-8 bg-yellow-100 hover:bg-yellow-200 text-yellow-600 rounded-lg flex items-center justify-center transition-all" title="Editar">
+                                        <i class="fas fa-edit text-xs"></i>
+                                    </button>
+                                    <button onclick="Licenca.renovar('${l.id}')" class="w-8 h-8 bg-green-100 hover:bg-green-200 text-green-600 rounded-lg flex items-center justify-center transition-all" title="Renovar">
+                                        <i class="fas fa-redo text-xs"></i>
+                                    </button>
+                                    <button onclick="Licenca.bloquear('${l.id}')" class="w-8 h-8 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg flex items-center justify-center transition-all" title="Bloquear">
+                                        <i class="fas fa-ban text-xs"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            },
+
+            formatarDocumento(doc) {
+                if (doc.length === 11) {
+                    return doc.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+                } else if (doc.length === 14) {
+                    return doc.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+                }
+                return doc;
+            },
+
+            filtrar() {
+                const busca = document.getElementById('filtro-busca').value.toLowerCase();
+                const status = document.getElementById('filtro-status').value;
+
+                const filtradas = this.todasLicencas.filter(l => {
+                    const matchBusca = !busca || 
+                        l.id.includes(busca) || 
+                        l.dadosEmpresa?.nome?.toLowerCase().includes(busca) ||
+                        l.dadosEmpresa?.email?.toLowerCase().includes(busca);
+                    
+                    const matchStatus = status === 'todos' || l.status === status;
+                    
+                    return matchBusca && matchStatus;
+                });
+
+                this.renderizarLista(filtradas);
+            },
+
+            atualizarResumo() {
+                const hoje = new Date();
+                const seteDias = new Date(hoje.getTime() + 7 * 24 * 60 * 60 * 1000);
+                
+                let ativas = 0, novas = 0, renovacoes = 0, expirando = 0, bloqueados = 0;
+                let faturamento = 0;
+
+                this.todasLicencas.forEach(l => {
+                    const expiracao = l.dataExpiracao ? new Date(l.dataExpiracao) : null;
+                    const criacao = l.criadoEm ? new Date(l.criadoEm) : null;
+                    
+                    if (l.status === 'ativo') ativas++;
+                    if (l.status === 'bloqueado') bloqueados++;
+                    if (expiracao && expiracao <= seteDias && expiracao >= hoje) expirando++;
+                    if (criacao && criacao.getMonth() === hoje.getMonth() && criacao.getFullYear() === hoje.getFullYear()) {
+                        novas++;
+                        if (l.historicoPagamentos && l.historicoPagamentos.length > 1) renovacoes++;
+                    }
+                    
+                    faturamento += l.valorPago || 0;
+                });
+
+                document.getElementById('total-ativas').textContent = ativas;
+                document.getElementById('total-faturamento').textContent = 'R$ ' + faturamento.toLocaleString('pt-BR', {minimumFractionDigits: 0});
+                document.getElementById('resumo-novas').textContent = novas;
+                document.getElementById('resumo-renovacoes').textContent = renovacoes;
+                document.getElementById('resumo-expirando').textContent = expirando;
+                document.getElementById('resumo-bloqueados').textContent = bloqueados;
+            },
+
+            async verDetalhes(id) {
+                const l = this.todasLicencas.find(x => x.id === id);
+                if (!l) return;
+
+                const detalhes = `
+DETALHES DA LICENÇA
+
+Documento: ${this.formatarDocumento(l.id)}
+Empresa: ${l.dadosEmpresa?.nome || 'N/A'}
+Email: ${l.dadosEmpresa?.email || 'N/A'}
+Telefone: ${l.dadosEmpresa?.telefone || 'N/A'}
+Subdomínio: ${l.dadosEmpresa?.subdominio || 'N/A'}.nexus.cloud
+
+Plano: ${l.plano?.toUpperCase() || 'ENTERPRISE'}
+Status: ${l.status?.toUpperCase()}
+Chave: ${l.chaveLicenca || 'Não gerada'}
+Tenant ID: ${l.tenantId || 'Não ativado'}
+
+Criado em: ${l.criadoEm ? new Date(l.criadoEm).toLocaleString('pt-BR') : 'N/A'}
+Expira em: ${l.dataExpiracao ? new Date(l.dataExpiracao).toLocaleString('pt-BR') : 'N/A'}
+
+Valor Pago: R$ ${l.valorPago?.toFixed(2) || '0,00'}
+Cadastrado: ${l.cadastrado ? 'SIM' : 'NÃO'}
+                `;
+                
+                alert(detalhes);
+            },
+
+            abrirEdicao(id) {
+                const l = this.todasLicencas.find(x => x.id === id);
+                if (!l) return;
+
+                document.getElementById('edit-id').value = id;
+                document.getElementById('edit-nome').value = l.dadosEmpresa?.nome || '';
+                document.getElementById('edit-status').value = l.status || 'ativo';
+                
+                const expiracao = l.dataExpiracao ? new Date(l.dataExpiracao) : new Date();
+                const hoje = new Date();
+                const diasRestantes = Math.floor((expiracao - hoje) / (1000 * 60 * 60 * 24));
+                document.getElementById('edit-dias').value = diasRestantes > 0 ? diasRestantes : 30;
+                
+                document.getElementById('edit-chave').value = '';
+                
+                document.getElementById('modal-edicao').classList.remove('hidden');
+                document.getElementById('modal-edicao').classList.add('flex');
+            },
+
+            fecharModal() {
+                document.getElementById('modal-edicao').classList.add('hidden');
+                document.getElementById('modal-edicao').classList.remove('flex');
+            },
+
+            async salvarEdicao() {
+                const id = document.getElementById('edit-id').value;
+                const nome = document.getElementById('edit-nome').value.trim();
+                const status = document.getElementById('edit-status').value;
+                const dias = parseInt(document.getElementById('edit-dias').value) || 30;
+                const novaChave = document.getElementById('edit-chave').value.trim();
+
+                try {
+                    const updates = {
+                        'dadosEmpresa.nome': nome,
+                        status: status
+                    };
+
+                    // Atualizar expiração
+                    const novaExpiracao = new Date();
+                    novaExpiracao.setDate(novaExpiracao.getDate() + dias);
+                    updates.dataExpiracao = novaExpiracao.toISOString();
+
+                    // Se gerou nova chave
+                    if (novaChave && novaChave.startsWith('NEX-')) {
+                        updates.chaveLicenca = novaChave.toUpperCase();
+                    }
+
+                    await updateDoc(doc(db, "autorizacoes", id), updates);
+                    
+                    this.toast('Licença atualizada!', 'success');
+                    this.fecharModal();
+                    this.carregarTodas();
+
+                } catch (e) {
+                    this.toast('Erro ao salvar: ' + e.message, 'error');
+                }
+            },
+
+            async renovar(id) {
+                const l = this.todasLicencas.find(x => x.id === id);
+                if (!l) return;
+
+                const dias = prompt('Quantos dias adicionar?', '365');
+                if (!dias || isNaN(dias)) return;
+
+                const valor = prompt('Valor do pagamento (R$):', '11964');
+                if (!valor || isNaN(valor)) return;
+
+                try {
+                    const expiracaoAtual = l.dataExpiracao ? new Date(l.dataExpiracao) : new Date();
+                    const novaExpiracao = new Date(expiracaoAtual.getTime() + parseInt(dias) * 24 * 60 * 60 * 1000);
+                    
+                    const novoPagamento = {
+                        data: new Date().toISOString(),
+                        valor: parseFloat(valor),
+                        tipo: 'renovacao'
+                    };
+
+                    await updateDoc(doc(db, "autorizacoes", id), {
+                        dataExpiracao: novaExpiracao.toISOString(),
+                        status: 'ativo',
+                        valorPago: (l.valorPago || 0) + parseFloat(valor),
+                        historicoPagamentos: [...(l.historicoPagamentos || []), novoPagamento]
+                    });
+
+                    this.toast(`Licença renovada! Nova expiração: ${novaExpiracao.toLocaleDateString('pt-BR')}`, 'success');
+                    this.carregarTodas();
+
+                } catch (e) {
+                    this.toast('Erro ao renovar: ' + e.message, 'error');
+                }
+            },
+
+            async bloquear(id) {
+                if (!confirm('Bloquear esta licença? O cliente perderá acesso imediatamente.')) return;
+
+                try {
+                    await updateDoc(doc(db, "autorizacoes", id), {
+                        status: 'bloqueado',
+                        bloqueadoEm: new Date().toISOString()
+                    });
+
+                    this.toast('Licença bloqueada!', 'warning');
+                    this.carregarTodas();
+
+                } catch (e) {
+                    this.toast('Erro ao bloquear: ' + e.message, 'error');
+                }
+            },
+
+            copiarChave() {
+                const chave = document.getElementById('chave-gerada');
+                chave.select();
+                document.execCommand('copy');
+                this.toast('Chave copiada!', 'success');
+            },
+
+            limpar() {
+                document.getElementById('novo-documento').value = '';
+                document.getElementById('novo-nome').value = '';
+                document.getElementById('novo-email').value = '';
+                document.getElementById('novo-telefone').value = '';
+                document.getElementById('novo-subdominio').value = '';
+                document.getElementById('novo-plano').value = 'enterprise';
+                document.getElementById('novo-dias').value = '365';
+                document.getElementById('novo-valor').value = '11964';
+                document.getElementById('resultado-novo').classList.add('hidden');
+            },
+
+            limparCampos() {
+                // Mantém para compatibilidade
+                this.limpar();
+            },
+
+            recarregar() {
+                this.carregarTodas();
+                this.toast('Lista atualizada!', 'success');
+            },
+
+            toast(msg, type = 'success') {
+                const container = document.getElementById('toast-container');
+                const toast = document.createElement('div');
+                
+                const styles = {
+                    success: 'bg-green-600',
+                    error: 'bg-red-600',
+                    warning: 'bg-yellow-600',
+                    info: 'bg-blue-600'
+                };
+                
+                toast.className = `${styles[type]} text-white px-6 py-4 rounded-xl text-xs font-black uppercase shadow-2xl flex items-center gap-3 animate-bounce pointer-events-auto`;
+                toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'times' : 'exclamation'}"></i>${msg}`;
+                
+                container.appendChild(toast);
+                setTimeout(() => toast.remove(), 4000);
+            }
+        };
+
+        // Inicialização
+        window.Auth = Auth;
+        window.Licenca = Licenca;
+        
+        // Verificar autenticação ao carregar
+        Auth.check();
     </script>
 </body>
 </html>
